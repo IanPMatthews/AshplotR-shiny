@@ -10,10 +10,10 @@ library(shinyjs)
 library(webshot)
 library(magick)
 library(htmlwidgets)
-library(Cairo)
 library(patchwork)
 library(egg)
 library(grid)
+library(ragg)
 
 Tephra.theme <- theme_bw() +
   theme(
@@ -27,10 +27,10 @@ Tephra.theme <- theme_bw() +
 
 chempalette <- c(
   "#209A24", "#A769EE", "#B4C428", "#e30303", "#000000", "#EF139D", "#3A700F",
-           "#5288FF", "#E64701", "#7F9AF5", "#F36D20", "#0B3075", "#C18522", "#9634A6",
-           "#1D7D46", "#80ddb8", "#7CBC92", "#B10E89", "#384B27", "#F896FD", "#C6A766",
-           "#20628E", "#9C0323", "#C3AFE0", "#572D24", "#004a0d", "#ff8bea", "#fdce47",
-           "#002572", "#515e00", "#840064", "#008a5d","#ff6e77","#13beff","#7b3500"
+  "#5288FF", "#E64701", "#7F9AF5", "#F36D20", "#0B3075", "#C18522", "#9634A6",
+  "#1D7D46", "#80ddb8", "#7CBC92", "#B10E89", "#384B27", "#F896FD", "#C6A766",
+  "#20628E", "#9C0323", "#C3AFE0", "#572D24", "#004a0d", "#ff8bea", "#fdce47",
+  "#002572", "#515e00", "#840064", "#008a5d","#ff6e77","#13beff","#7b3500"
 )
 
 symbolList <- c(
@@ -57,6 +57,7 @@ get_label <- function(var) {
   )
 }
 
+
 ui <- fluidPage(
   shinyjs::useShinyjs(),  # Initialize shinyjs
   theme = shinytheme("yeti"),
@@ -72,12 +73,11 @@ ui <- fluidPage(
       fileInput("dataFile", "Upload Data (CSV format)"),
       selectInput("xVariable", "X-axis Variable:", choices = NULL),
       selectInput("yVariable", "Y-axis Variable:", choices = NULL),
-      actionButton("plotButton", "Generate Plot", class = "btn-primary"),
       downloadButton("downloadHarkerPlot", "Download Harker Plot (PDF)", class = "btn-primary"),
       downloadButton("downloadscatterPlot2", "Download xy Plot (PDF)", class = "btn-primary"),
       downloadButton("downloadTasPlot", "Download TAS Plot (PDF)", class = "btn-primary"),
       
-            
+      
       # New Options Checkbox
       checkboxInput("showOptions", "Options", value = FALSE),
       
@@ -120,7 +120,7 @@ ui <- fluidPage(
                    tabPanel("Publication xy Plot", plotOutput("scatterPlot2", height = "800px", width = "1000px")),
                    tabPanel("Publication TAS Plot", plotOutput("tasPlot2", height = "800px", width = "1000px"))
                    
-                           )
+        )
       )
     )
   ),
@@ -186,13 +186,19 @@ server <- function(input, output, session) {
     }
   }
   
-  output$scatterPlot2 <- renderPlot({
-    # Render the scatterplot plot using the generatescatterPlot2 function
-    scatterPlot2 <- generatescatterPlot2()
+  # Render the plot in Shiny output using ragg device
+  output$scatterPlot2 <- renderImage({
+    # Create a temporary file for the plot image
+    outfile <- tempfile(fileext = ".png")
     
-    # Render the scatter plot grid
-    scatterPlot2
-  }, height = 800, width = 800)
+    # Use ragg to save the ggplot to the temporary file
+    ragg::agg_png(outfile, width = 1600, height = 1600,units = "px", res = 96, scaling = 2)
+    print(generatescatterPlot2())
+    dev.off()
+    
+    # Return a list containing information about the image
+    list(src = outfile, contentType = "image/png", width = 800, height = 800)
+  }, deleteFile = TRUE)
   
   
   output$downloadscatterPlot2 <- downloadHandler(
@@ -251,7 +257,7 @@ server <- function(input, output, session) {
         Tephra.theme
       
       ggplotly(p1, width = 1000, height = 800, dynamicTicks = TRUE) %>%
-      config(toImageButtonOptions = list(format = "png", width = 1000, height = 800, scale = 2))
+        config(toImageButtonOptions = list(format = "png", width = 1000, height = 800, scale = 2))
       
     }
   })
@@ -365,105 +371,105 @@ server <- function(input, output, session) {
       Tephra.theme +
       labs(fill = "Samples", shape = "Samples") +
       theme(legend.position = "bottom")
-      
-      p3 <- ggplot(data(), aes(x = SiO2, y = Al2O3, fill = id, shape = id)) +
-        geom_point(aes(fill = id), size = 4, alpha = 0.8) +
-        xlab(expression(SiO[2] ~ "(wt%)")) +
-        ylab(expression(Al[2]*O[3] ~ "(wt%)"))+
-        scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
-        scale_fill_manual(values = chempalette) +
-        Tephra.theme
-        
-        p4 <- ggplot(data(), aes(x = SiO2, y = FeO, fill = id, shape = id)) +
-          geom_point(aes(fill = id), size = 4, alpha = 0.8) +
-          xlab(expression(SiO[2] ~ "(wt%)")) +
-          ylab(expression(FeO^t ~ "(wt%)")) +
-          scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
-          scale_fill_manual(values = chempalette) +
-          Tephra.theme
-          
-          p5 <- ggplot(data(), aes(x = SiO2, y = MnO, fill = id, shape = id)) +
-            geom_point(aes(fill = id), size = 4, alpha = 0.8) +
-            xlab(expression(SiO[2] ~ "(wt%)")) +
-            ylab("MnO (wt%)") +
-            scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
-            scale_fill_manual(values = chempalette) +
-            Tephra.theme
-            
-            p6 <- ggplot(data(), aes(x = SiO2, y = MgO, fill = id, shape = id)) +
-              geom_point(aes(fill = id), size = 4, alpha = 0.8) +
-              xlab(expression(SiO[2] ~ "(wt%)")) +
-              ylab("MgO (wt%)") +
-              scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
-              scale_fill_manual(values = chempalette) +
-              Tephra.theme
-              
-              p7 <- ggplot(data(), aes(x = SiO2, y = CaO, fill = id, shape = id)) +
-                geom_point(aes(fill = id), size = 4, alpha = 0.8) +
-                xlab(expression(SiO[2] ~ "(wt%)")) +
-                ylab("CaO (wt%)") +
-                scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
-                scale_fill_manual(values = chempalette) +
-                Tephra.theme
-                
-                p8 <- ggplot(data(), aes(x = SiO2, y = Na2O, fill = id, shape = id)) +
-                  geom_point(aes(fill = id), size = 4, alpha = 0.8) +
-                  xlab(expression(SiO[2] ~ "(wt%)")) +
-                  ylab(expression(Na[2]*O ~ "(wt%)")) +
-                  scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
-                  scale_fill_manual(values = chempalette) +
-                  Tephra.theme
-                  
-                  p9 <- ggplot(data(), aes(x = SiO2, y = K2O, fill = id, shape = id)) +
-                    geom_point(aes(fill = id), size = 4, alpha = 0.8) +
-                    xlab(expression(SiO[2] ~ "(wt%)")) +
-                    ylab(expression(K[2]*O ~ "(wt%)")) +
-                    scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
-                    scale_fill_manual(values = chempalette) +
-                    Tephra.theme
-                    
-                    p10 <- ggplot(data(), aes(x = SiO2, y = P2O5, fill = id, shape = id)) +
-                      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
-                      xlab(expression(SiO[2] ~ "(wt%)")) +
-                      ylab(expression(P[2]*O[5] ~ "(wt%)")) +
-                      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
-                      scale_fill_manual(values = chempalette) +
-                      Tephra.theme
-                    
-                    # Get the legend from the main plot
-#                    legend <- get_legend(p2 +
-#                                           guides(color = guide_legend(nrow = 1)) +
-#                                           theme(legend.position = "bottom"))
-                    legend <- cowplot::get_plot_component(p2, "guide-box", return_all = TRUE)[[3]]
-                    
-                      
-                    # Generate the Harker plot grid
-                    harkerGrid <- plot_grid(
-                      p2 + theme(legend.position = "none"),
-                      p3 + theme(legend.position = "none"),
-                      p4 + theme(legend.position = "none"),
-                      p5 + theme(legend.position = "none"),
-                      p6 + theme(legend.position = "none"),
-                      p7 + theme(legend.position = "none"),
-                      p8 + theme(legend.position = "none"),
-                      p9 + theme(legend.position = "none"),
-                      p10 + theme(legend.position = "none"),
-                      labels = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J"),
-                      align = "b"
-                    )
-                    
-                    # Create a plot grid with the Harker plot grid and legend
-                    harkerPlot <- plot_grid(harkerGrid, legend, ncol = 1, nrow = 2, rel_heights = c(3, 0.2))
-                    
-                    # Add title and adjust the size
-                    harkerPlot <- ggdraw(harkerPlot) + draw_label(
-                      "Harker Plots",
-                      x = 0, y = 1, hjust = 0, vjust = 1,
-                      fontface = "bold", size = 11
-                    )
-                    
-                    # Return the Harker plot
-                    harkerPlot
+    
+    p3 <- ggplot(data(), aes(x = SiO2, y = Al2O3, fill = id, shape = id)) +
+      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
+      xlab(expression(SiO[2] ~ "(wt%)")) +
+      ylab(expression(Al[2]*O[3] ~ "(wt%)"))+
+      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
+      scale_fill_manual(values = chempalette) +
+      Tephra.theme
+    
+    p4 <- ggplot(data(), aes(x = SiO2, y = FeO, fill = id, shape = id)) +
+      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
+      xlab(expression(SiO[2] ~ "(wt%)")) +
+      ylab(expression(FeO^t ~ "(wt%)")) +
+      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
+      scale_fill_manual(values = chempalette) +
+      Tephra.theme
+    
+    p5 <- ggplot(data(), aes(x = SiO2, y = MnO, fill = id, shape = id)) +
+      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
+      xlab(expression(SiO[2] ~ "(wt%)")) +
+      ylab("MnO (wt%)") +
+      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
+      scale_fill_manual(values = chempalette) +
+      Tephra.theme
+    
+    p6 <- ggplot(data(), aes(x = SiO2, y = MgO, fill = id, shape = id)) +
+      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
+      xlab(expression(SiO[2] ~ "(wt%)")) +
+      ylab("MgO (wt%)") +
+      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
+      scale_fill_manual(values = chempalette) +
+      Tephra.theme
+    
+    p7 <- ggplot(data(), aes(x = SiO2, y = CaO, fill = id, shape = id)) +
+      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
+      xlab(expression(SiO[2] ~ "(wt%)")) +
+      ylab("CaO (wt%)") +
+      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
+      scale_fill_manual(values = chempalette) +
+      Tephra.theme
+    
+    p8 <- ggplot(data(), aes(x = SiO2, y = Na2O, fill = id, shape = id)) +
+      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
+      xlab(expression(SiO[2] ~ "(wt%)")) +
+      ylab(expression(Na[2]*O ~ "(wt%)")) +
+      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
+      scale_fill_manual(values = chempalette) +
+      Tephra.theme
+    
+    p9 <- ggplot(data(), aes(x = SiO2, y = K2O, fill = id, shape = id)) +
+      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
+      xlab(expression(SiO[2] ~ "(wt%)")) +
+      ylab(expression(K[2]*O ~ "(wt%)")) +
+      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
+      scale_fill_manual(values = chempalette) +
+      Tephra.theme
+    
+    p10 <- ggplot(data(), aes(x = SiO2, y = P2O5, fill = id, shape = id)) +
+      geom_point(aes(fill = id), size = 4, alpha = 0.8) +
+      xlab(expression(SiO[2] ~ "(wt%)")) +
+      ylab(expression(P[2]*O[5] ~ "(wt%)")) +
+      scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(data()$id))) +
+      scale_fill_manual(values = chempalette) +
+      Tephra.theme
+    
+    # Get the legend from the main plot
+    #                    legend <- get_legend(p2 +
+    #                                           guides(color = guide_legend(nrow = 1)) +
+    #                                           theme(legend.position = "bottom"))
+    legend <- cowplot::get_plot_component(p2, "guide-box", return_all = TRUE)[[3]]
+    
+    
+    # Generate the Harker plot grid
+    harkerGrid <- plot_grid(
+      p2 + theme(legend.position = "none"),
+      p3 + theme(legend.position = "none"),
+      p4 + theme(legend.position = "none"),
+      p5 + theme(legend.position = "none"),
+      p6 + theme(legend.position = "none"),
+      p7 + theme(legend.position = "none"),
+      p8 + theme(legend.position = "none"),
+      p9 + theme(legend.position = "none"),
+      p10 + theme(legend.position = "none"),
+      labels = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J"),
+      align = "b"
+    )
+    
+    # Create a plot grid with the Harker plot grid and legend
+    harkerPlot <- plot_grid(harkerGrid, legend, ncol = 1, nrow = 2, rel_heights = c(3, 0.2))
+    
+    # Add title and adjust the size
+    harkerPlot <- ggdraw(harkerPlot) + draw_label(
+      "Harker Plots",
+      x = 0, y = 1, hjust = 0, vjust = 1,
+      fontface = "bold", size = 11
+    )
+    
+    # Return the Harker plot
+    harkerPlot
   } 
   
   output$harkerPlot <- renderPlot({
@@ -488,9 +494,9 @@ server <- function(input, output, session) {
     }
   )
   
-
   
-
+  
+  
   #### new ####
   
   
@@ -522,8 +528,8 @@ server <- function(input, output, session) {
     density_plot
   })
   
-
-
+  
+  
   output$summaryTable <- renderTable({
     summaryTable <- data() %>% group_by(id) %>% summarise(across(everything(), list(mean = mean, sd = sd), na.rm = TRUE))
     
@@ -540,7 +546,7 @@ server <- function(input, output, session) {
     scatterPlot2()
   }
   
-
+  
   
   # Download summary table as CSV
   output$downloadSummaryTable <- downloadHandler(
@@ -554,7 +560,7 @@ server <- function(input, output, session) {
     scatterPlot()
   })
   
-
+  
   output$tasPlot <- renderPlotly({
     tasPlot()
   })
@@ -562,8 +568,7 @@ server <- function(input, output, session) {
   output$sio2k2oPlot <- renderPlotly({
     sio2k2oPlot()
   })
-  }
+}
 
 shinyApp(ui, server)
 
-                        
