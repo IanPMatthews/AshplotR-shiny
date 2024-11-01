@@ -1,0 +1,13 @@
+name: AshplotR-shiny
+title: AshplotR-shiny
+username: ian-matthews
+account: ian-matthews
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 13166212
+bundleId: 9302404
+url: https://ian-matthews.shinyapps.io/AshplotR-shiny/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: app_2.R|app_3.R

@@ -59,6 +59,7 @@ get_label <- function(var) {
 
 
 ui <- fluidPage(
+  tags$head(includeHTML("google_analytics.html")),
   shinyjs::useShinyjs(),  # Initialize shinyjs
   theme = shinytheme("yeti"),
   titlePanel(
@@ -96,6 +97,11 @@ ui <- fluidPage(
             </div>"),          
       HTML("<div style='margin-top: 20px;'>
       The citation is: Matthews, Ian; Pike, Joshua (2023). AshplotR. Royal Holloway, University of London. Software. <a href='https://doi.org/10.17637/rh.21941432.v1'>https://doi.org/10.17637/rh.21941432.v1</a>.</p>
+           </div>"),
+      HTML("<div style='margin-top: 20px;'>
+      A walkthrough of data formats and how to navigate AshplotR is available here xxxxxxxx
+      To use the AshplotR shard count plotter please click here xxxxxxx
+      To use the AshplotR standard checker please click here xxxxxxxxx
            </div>"),
       absolutePanel(
         bottom = "2px", left = "10px",
