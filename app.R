@@ -14,6 +14,8 @@ library(patchwork)
 library(egg)
 library(grid)
 library(ragg)
+library(ggalt)
+library(shinyWidgets)
 
 Tephra.theme <- theme_bw() +
   theme(
@@ -77,20 +79,28 @@ ui <- fluidPage(
       downloadButton("downloadHarkerPlot", "Download Harker Plot (PDF)", class = "btn-primary"),
       downloadButton("downloadscatterPlot2", "Download xy Plot (PDF)", class = "btn-primary"),
       downloadButton("downloadTasPlot", "Download TAS Plot (PDF)", class = "btn-primary"),
+      downloadButton("downloadfieldPlot", "Download field Plot (PDF)", class = "btn-primary"),
       
       
       # New Options Checkbox
       checkboxInput("showOptions", "Options", value = FALSE),
       
-      # Conditional panel for axis limits based on "Options" checkbox
+      # Conditional panel for additional options based on "Options" checkbox
       conditionalPanel(
         condition = "input.showOptions",
+        
         h4("Adjust Axis Limits"),
         numericInput("xMin", "X-axis Minimum", value = NULL),
         numericInput("xMax", "X-axis Maximum", value = NULL),
         numericInput("yMin", "Y-axis Minimum", value = NULL),
-        numericInput("yMax", "Y-axis Maximum", value = NULL)
+        numericInput("yMax", "Y-axis Maximum", value = NULL),
+        
+        h4("Display Options"),
+        pickerInput("pointGroups", "Select Groups for Points:", choices = NULL, multiple = TRUE),
+        pickerInput("encircleGroups", "Select Groups for Encircle:", choices = NULL, multiple = TRUE)
       ),
+      
+      
       
       HTML("<div style='margin-top: 20px;'>
              <p>AshplotR shiny app is based on the code of Matthews and Pike's AshplotR r code. The shiny app provides a restricted range of plots for major element tephra chemical exploration in comparison with the main code. Users are encouraged to explore the main code if they are able, and if they use this app or the main code are encouraged to cite it. 
@@ -124,7 +134,9 @@ ui <- fluidPage(
         navbarMenu("Publication Plots",
                    tabPanel("Harker Plot", plotOutput("harkerPlot")),
                    tabPanel("Publication xy Plot", plotOutput("scatterPlot2", height = "800px", width = "1000px")),
-                   tabPanel("Publication TAS Plot", plotOutput("tasPlot2", height = "800px", width = "1000px"))
+                   tabPanel("Publication TAS Plot", plotOutput("tasPlot2", height = "800px", width = "1000px")),
+                   tabPanel("Publication field Plot", plotOutput("fieldPlot", height = "800px", width = "1000px"))
+                   
                    
         )
       )
@@ -219,6 +231,74 @@ server <- function(input, output, session) {
       dev.off()
     }
   )
+  #####
+  observe({
+    # Check if data() is available and contains the id column
+    if (!is.null(data()) && "id" %in% colnames(data())) {
+      # Extract unique ids from data() and update picker choices
+      unique_ids <- unique(data()$id)
+      
+      updatePickerInput(session, "pointGroups", choices = unique_ids)
+      updatePickerInput(session, "encircleGroups", choices = unique_ids)
+    }
+  })
+  
+  
+  # Rename the function
+  generateFieldPlot <- function() {
+    if (!is.null(input$xVariable) && !is.null(input$yVariable)) {
+      plot_data <- data() %>% 
+        select(all_of(input$xVariable), all_of(input$yVariable), id)
+      
+      # Split data based on selected groups
+      point_data <- plot_data %>% filter(id %in% input$pointGroups)
+      encircle_data <- plot_data %>% filter(id %in% input$encircleGroups)
+      
+      p_out <- ggplot() +
+        # Add encircle layer if any groups selected
+        { if (nrow(encircle_data) > 0) geom_encircle(aes_string(x = input$xVariable, y = input$yVariable, group = "id", fill = "id"), 
+                                                     data = encircle_data, color = "black", s_shape = 0.5, expand = 0, alpha = 0.3) } +
+        # Add points layer, ensuring it plots on top
+        geom_point(aes_string(x = input$xVariable, y = input$yVariable, fill = "id", shape = "id"),
+                   data = point_data, size = 4, alpha = 0.8) +
+        scale_shape_manual(values = rep(c(21:25), length.out = n_distinct(point_data$id))) +
+        scale_fill_manual(values = chempalette) +
+        labs(x = get_label(input$xVariable), y = get_label(input$yVariable), fill = "Samples", shape = "Samples") +
+        Tephra.theme +
+        coord_cartesian(xlim = c(input$xMin, input$xMax), ylim = c(input$yMin, input$yMax)) +
+        theme(legend.position = "bottom")
+    }
+  }
+  
+  
+  # Update Shiny output for the plot
+  output$fieldPlot <- renderImage({
+    # Create a temporary file for the plot image
+    outfile <- tempfile(fileext = ".png")
+    
+    # Use ragg to save the ggplot to the temporary file
+    ragg::agg_png(outfile, width = 1600, height = 1600, units = "px", res = 96, scaling = 2)
+    print(generateFieldPlot())
+    dev.off()
+    
+    # Return a list containing information about the image
+    list(src = outfile, contentType = "image/png", width = 800, height = 800)
+  }, deleteFile = TRUE)
+  
+  output$downloadfieldPlot <- downloadHandler(
+    filename = function() {
+      "fieldplot.pdf"
+    },
+    content = function(file) {
+      # Save the plot as a PDF
+      pdf(file, width = 10, height = 10)
+      plot <- generateFieldPlot()
+      print(plot)
+      dev.off()
+    }
+  )
+  
+  
   
   tasPlot <- reactive({
     if (!is.null(input$xVariable) && !is.null(input$yVariable)) {
